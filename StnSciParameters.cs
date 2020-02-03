@@ -396,20 +396,31 @@ namespace StationScience.Contracts.Parameters
             CelestialBody targetBody = StnSciParameter.getTargetBody(this);
             AvailablePart experimentType = StnSciParameter.getExperimentType(this);
             if (targetBody == null || experimentType == null)
-            {
                 return;
-            }
+            StnSciScenario.Log($"Recovering '{pv.vesselName}'; Experiment: '{experimentType.name}'; Body: '{targetBody.name}'");
+            var foundPart = false;
             foreach (ProtoPartSnapshot part in pv.protoPartSnapshots)
             {
                 if (part.partName == experimentType.name)
                 {
+                    foundPart = true;
+                    var foundModule = false;
                     foreach(ProtoPartModuleSnapshot module in part.modules)
                     {
                         if (module.moduleName == "StationExperiment")
                         {
+                            foundModule = true;
                             ConfigNode cn = module.moduleValues;
-                            if (!cn.HasValue("launched") || !cn.HasValue("completed"))
+                            if (!cn.HasValue("launched"))
+                            {
+                                StnSciScenario.Log($"{part.partName}: not launched");
                                 continue;
+                            }
+                            if (!cn.HasValue("completed"))
+                            {
+                                StnSciScenario.Log($"{part.partName}: not completed");
+                                continue;
+                            }
                             float launched, completed;
                             try
                             {
@@ -421,27 +432,38 @@ namespace StationScience.Contracts.Parameters
                                 StnSciScenario.LogError(e.ToString());
                                 continue;
                             }
-                            if (launched >= this.Root.DateAccepted && completed >= launched)
+                            if (completed >= Root.DateAccepted /*launched >= this.Root.DateAccepted && completed >= launched*/)
                             {
                                 foreach (ConfigNode datum in cn.GetNodes("ScienceData"))
                                 {
                                     if (!datum.HasValue("subjectID"))
+                                    {
+                                        StnSciScenario.Log("No 'subjectID'");
                                         continue;
+                                    }
                                     string subjectID = datum.GetValue("subjectID");
                                     if (subjectID.ToLower().Contains("@" + targetBody.name.ToLower() + "inspace"))
                                     {
+                                        StnSciScenario.Log("Completed!");
                                         StnSciParameter parent = this.Parent as StnSciParameter;
                                         SetComplete();
                                         if (parent != null)
                                             parent.Complete();
                                         return;
                                     }
+                                    StnSciScenario.Log($"'{subjectID.ToLower()}' does not contain '{("@" + targetBody.name.ToLower() + "inspace")}'");
                                 }
                             }
+                            else
+                                StnSciScenario.Log($"launched: '{launched}'; accepted: '{Root.DateAccepted}'; completed: '{completed}'");
                         }
                     }
+                    if (!foundModule)
+                        StnSciScenario.Log($"Part '{part.partName}' does not contain module 'StationExperiment'");
                 }
             }
+            if (!foundPart)
+                StnSciScenario.Log($"No part matching '{experimentType.name}'");
         }
 
         private void OnRecovery(Vessel vessel)
