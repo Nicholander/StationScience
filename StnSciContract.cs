@@ -26,7 +26,7 @@ using KSPAchievements;
 
 namespace StationScience.Contracts
 {
-    public class StnSciContract : Contract, Parameters.PartRelated, Parameters.BodyRelated
+    public class StnSciContract : Contract, Parameters.IPartRelated, Parameters.IBodyRelated
     {
 
         CelestialBody targetBody = null;

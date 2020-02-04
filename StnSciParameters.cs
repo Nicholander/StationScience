@@ -27,35 +27,30 @@ using KSP.Localization;
 
 namespace StationScience.Contracts.Parameters
 {
-    
-    public interface PartRelated
+    using static StnSciScenario;
+
+    public interface IPartRelated
     {
         AvailablePart GetPartType();
     }
 
-    public interface BodyRelated
+    public interface IBodyRelated
     {
         CelestialBody GetBody();
     }
 
-    public class StnSciParameter : ContractParameter, PartRelated, BodyRelated
+    public class StnSciParameter : ContractParameter, IPartRelated, IBodyRelated
     {
         AvailablePart experimentType;
         CelestialBody targetBody;
 
         public AvailablePart GetPartType()
-        {
-            return experimentType;
-        }
-
+            => experimentType;
         public CelestialBody GetBody()
-        {
-            return targetBody;
-        }
+            => targetBody;
 
         public StnSciParameter()
         {
-            //SetExperiment("StnSciExperiment1");
             this.Enabled = true;
             this.DisableOnStateChange = false;
         }
@@ -66,48 +61,39 @@ namespace StationScience.Contracts.Parameters
             this.DisableOnStateChange = false;
             this.experimentType = type;
             this.targetBody = body;
-            //this.AddParameter(new Parameters.NewPodParameter(), null);
             this.AddParameter(new Parameters.DoExperimentParameter(), null);
             this.AddParameter(new Parameters.ReturnExperimentParameter(), null);
         }
 
         protected override string GetHashString()
-        {
-            return experimentType.name;
-        }
+            => experimentType.name;
 
         protected override string GetTitle()
-        {
-            return Localizer.Format("#autoLOC_StatSciParam_Title", experimentType.title, targetBody.GetDisplayName());
-        }
+            => Localizer.Format("#autoLOC_StatSciParam_Title", experimentType.title, targetBody.GetDisplayName());
 
         protected override string GetNotes()
-        {
-            return Localizer.Format("#autoLOC_StatSciParam_Notes", experimentType.title, targetBody.GetDisplayName());
-        }
+            => Localizer.Format("#autoLOC_StatSciParam_Notes", experimentType.title, targetBody.GetDisplayName());
 
         private bool SetExperiment(string exp)
         {
             experimentType = PartLoader.getPartInfoByName(exp);
             if (experimentType == null)
             {
-                StnSciScenario.LogError("Couldn't find experiment part: " + exp);
+                LogError("Couldn't find experiment part: " + exp);
                 return false;
             }
             return true;
         }
 
         public void Complete()
-        {
-            SetComplete();
-        }
+            => SetComplete();
 
         private bool SetTarget(string planet)
         {
             targetBody = FlightGlobals.Bodies.FirstOrDefault(body => body.bodyName.ToLower() == planet.ToLower());
             if (targetBody == null)
             {
-                StnSciScenario.LogError("Couldn't find planet: " + planet);
+                LogError("Couldn't find planet: " + planet);
                 return false;
             }
             return true;
@@ -130,159 +116,9 @@ namespace StationScience.Contracts.Parameters
         }
 
         static public AvailablePart getExperimentType(ContractParameter o)
-        {
-            object par = o.Parent;
-            if (par == null)
-                par = o.Root;
-            PartRelated parent = par as PartRelated;
-            if (parent != null)
-                return parent.GetPartType();
-            else
-                return null;
-        }
-
+            => ((o.Parent ?? o.Root) as IPartRelated)?.GetPartType();
         static public CelestialBody getTargetBody(ContractParameter o)
-        {
-            BodyRelated parent = o.Parent as BodyRelated;
-            if (parent != null)
-                return parent.GetBody();
-            else
-                return null;
-        }
-    }
-
-    public class NewPodParameter : ContractParameter
-    {
-        public NewPodParameter()
-        {
-            //SetExperiment("StnSciExperiment1");
-            this.Enabled = true;
-            this.DisableOnStateChange = false;
-        }
-
-        protected override string GetHashString()
-        {
-            return "new pod parameter " + this.GetHashCode();
-        }
-        protected override string GetTitle()
-        {
-            AvailablePart experimentType = StnSciParameter.getExperimentType(this);
-            if (experimentType == null)
-                return Localizer.Format("#autoLOC_StatSciNewPod_TitleA");
-            return Localizer.Format("#autoLOC_StatSciNewPod_TitleB", experimentType.title);
-        }
-
-        protected override void OnRegister()
-        {
-            GameEvents.onLaunch.Add(OnLaunch);
-            GameEvents.onVesselSituationChange.Add(OnVesselSituationChange);
-        }
-        protected override void OnUnregister()
-        {
-            GameEvents.onLaunch.Remove(OnLaunch);
-            GameEvents.onVesselSituationChange.Remove(OnVesselSituationChange);
-        }
-
-        private void OnVesselCreate(Vessel vessel)
-        {
-            AvailablePart experimentType = StnSciParameter.getExperimentType(this);
-            if (experimentType == null)
-                return;
-            foreach (Part part in vessel.Parts)
-            {
-                if (part.name == experimentType.name)
-                {
-                    StationExperiment e = part.FindModuleImplementing<StationExperiment>();
-                    if (e != null)
-                    {
-                        e.launched = (float)Planetarium.GetUniversalTime();
-                    }
-                }
-            }
-        }
-
-        private void OnVesselSituationChange(GameEvents.HostedFromToAction<Vessel,Vessel.Situations> arg)
-        {
-            if(!((arg.from == Vessel.Situations.LANDED || arg.from == Vessel.Situations.PRELAUNCH) &&
-                  (arg.to == Vessel.Situations.FLYING || arg.to == Vessel.Situations.SUB_ORBITAL)))
-                return;
-            if (arg.host.mainBody.name != "Kerbin")
-                return;
-            AvailablePart experimentType = StnSciParameter.getExperimentType(this);
-            if (experimentType == null)
-                return;
-            foreach (Part part in arg.host.Parts)
-            {
-                if (part.name == experimentType.name)
-                {
-                    StationExperiment e = part.FindModuleImplementing<StationExperiment>();
-                    if (e != null && e.launched == 0)
-                    {
-                        e.launched = (float)Planetarium.GetUniversalTime();
-                    }
-                }
-            }
-        }
-
-        private void OnLaunch(EventReport report)
-        {
-            AvailablePart experimentType = StnSciParameter.getExperimentType(this);
-            if (experimentType == null)
-                return;
-            Vessel vessel = FlightGlobals.ActiveVessel;
-            foreach (Part part in vessel.Parts)
-            {
-                if (part.name == experimentType.name)
-                {
-                    StationExperiment e = part.FindModuleImplementing<StationExperiment>();
-                    if (e != null && e.launched == 0)
-                    {
-                        e.launched = (float)Planetarium.GetUniversalTime();
-                    }
-                }
-            }
-        }
-
-        private float lastUpdate = 0;
-
-        protected override void OnUpdate()
-        {
-            base.OnUpdate();
-            if (lastUpdate > UnityEngine.Time.realtimeSinceStartup + .1)
-                return;
-            lastUpdate = UnityEngine.Time.realtimeSinceStartup;
-            Vessel vessel = FlightGlobals.ActiveVessel;
-            AvailablePart experimentType = StnSciParameter.getExperimentType(this);
-            if (experimentType == null)
-                return;
-            if (vessel != null)
-                foreach (Part part in vessel.Parts)
-                {
-                    if (part.name == experimentType.name)
-                    {
-                        StationExperiment e = part.FindModuleImplementing<StationExperiment>();
-                        if (e != null)
-                        {
-                            if (e.launched >= this.Root.DateAccepted)
-                            {
-                                SetComplete();
-                                return;
-                            }
-                        }
-                    }
-                }
-            SetIncomplete();
-        }
-
-        protected override void OnSave(ConfigNode node)
-        {
-            base.OnSave(node);
-        }
-        protected override void OnLoad(ConfigNode node)
-        {
-            base.OnLoad(node);
-            this.Enabled = true;
-        }
+            => (o.Parent as IBodyRelated)?.GetBody();
     }
 
     public class DoExperimentParameter : ContractParameter
@@ -294,16 +130,13 @@ namespace StationScience.Contracts.Parameters
         }
 
         protected override string GetHashString()
-        {
-            return Localizer.Format("#autoLOC_StatSciDoExp_Hash", this.GetHashCode());
-        }
+            => Localizer.Format("#autoLOC_StatSciDoExp_Hash", this.GetHashCode());
         protected override string GetTitle()
         {
-            CelestialBody targetBody = StnSciParameter.getTargetBody(this);
-            if (targetBody == null)
-                return Localizer.Format("#autoLOC_StatSciDoExp_TitleA");
-            else
-                return Localizer.Format("#autoLOC_StatSciDoExp_TitleB", targetBody.GetDisplayName());
+            var targetBody = StnSciParameter.getTargetBody(this);
+            return targetBody == null
+                ? Localizer.Format("#autoLOC_StatSciDoExp_TitleA")
+                : Localizer.Format("#autoLOC_StatSciDoExp_TitleB", targetBody.GetDisplayName());
         }
 
         private float lastUpdate = 0;
@@ -311,47 +144,44 @@ namespace StationScience.Contracts.Parameters
         protected override void OnUpdate()
         {
             base.OnUpdate();
-            if (lastUpdate > UnityEngine.Time.realtimeSinceStartup + .1)
+
+            var now = Time.realtimeSinceStartup;
+            if ((now - lastUpdate) < 0.1f)
                 return;
-            CelestialBody targetBody = StnSciParameter.getTargetBody(this);
-            AvailablePart experimentType = StnSciParameter.getExperimentType(this);
+
+            var targetBody = StnSciParameter.getTargetBody(this);
+            var experimentType = StnSciParameter.getExperimentType(this);
             if (targetBody == null || experimentType == null)
-            if (targetBody == null || experimentType == null)
-            {
                 return;
-            }
-            lastUpdate = UnityEngine.Time.realtimeSinceStartup;
-            Vessel vessel = FlightGlobals.ActiveVessel;
+
+            lastUpdate = now;
+            var vessel = FlightGlobals.ActiveVessel;
             if (vessel != null)
-                foreach (Part part in vessel.Parts)
+            {
+                foreach (var part in vessel.Parts)
                 {
-                    if (part.name == experimentType.name)
+                    if (part.name != experimentType.name)
+                        continue;
+                    var e = part.FindModuleImplementing<StationExperiment>();
+                    if (e == null)
+                        continue;
+                    if (e.completed >= Root.DateAccepted)
                     {
-                        StationExperiment e = part.FindModuleImplementing<StationExperiment>();
-                        if (e != null)
+                        ScienceData[] data = e.GetData();
+                        foreach (var datum in data)
                         {
-                            if (e.completed >= this.Root.DateAccepted && e.completed > e.launched)
+                            if (datum.subjectID.ToLower().Contains("@" + targetBody.name.ToLower() + "inspace"))
                             {
-                                ScienceData[] data = e.GetData();
-                                foreach (ScienceData datum in data)
-                                {
-                                    if (datum.subjectID.ToLower().Contains("@" + targetBody.name.ToLower() + "inspace"))
-                                    {
-                                        SetComplete();
-                                        return;
-                                    }
-                                }
+                                SetComplete();
+                                return;
                             }
                         }
                     }
                 }
+            }
             SetIncomplete();
         }
 
-        protected override void OnSave(ConfigNode node)
-        {
-            base.OnSave(node);
-        }
         protected override void OnLoad(ConfigNode node)
         {
             base.OnLoad(node);
@@ -367,145 +197,96 @@ namespace StationScience.Contracts.Parameters
             this.DisableOnStateChange = false;
         }
 
-        public void OnAccept(Contract contract)
-        {
-        }
-
         protected override string GetHashString()
-        {
-            return "recover experiment " + this.GetHashCode();
-        }
+            => "recover experiment " + this.GetHashCode();
         protected override string GetTitle()
-        {
-            return Localizer.Format("#autoLOC_StatSciRetParam_Title");
-        }
+            => Localizer.Format("#autoLOC_StatSciRetParam_Title");
 
         protected override void OnRegister()
-        {
-            //GameEvents.OnVesselRecoveryRequested.Add(OnRecovery);
-            GameEvents.onVesselRecovered.Add(OnRecovered);
-        }
+            => GameEvents.onVesselRecovered.Add(OnRecovered);
         protected override void OnUnregister()
-        {
-            //GameEvents.OnVesselRecoveryRequested.Remove(OnRecovery);
-            GameEvents.onVesselRecovered.Remove(OnRecovered);
-        }
+            => GameEvents.onVesselRecovered.Remove(OnRecovered);
 
         private void OnRecovered(ProtoVessel pv, bool dummy)
         {
-            CelestialBody targetBody = StnSciParameter.getTargetBody(this);
-            AvailablePart experimentType = StnSciParameter.getExperimentType(this);
+            var targetBody = StnSciParameter.getTargetBody(this);
+            var experimentType = StnSciParameter.getExperimentType(this);
             if (targetBody == null || experimentType == null)
                 return;
-            StnSciScenario.Log($"Recovering '{pv.vesselName}'; Experiment: '{experimentType.name}'; Body: '{targetBody.name}'");
+#if DEBUG
+            DebugLog($"Recovering '{pv.vesselName}'; Experiment: '{experimentType.name}'; Body: '{targetBody.name}'");
             var foundPart = false;
-            foreach (ProtoPartSnapshot part in pv.protoPartSnapshots)
+#endif
+            foreach (var part in pv.protoPartSnapshots)
             {
-                if (part.partName == experimentType.name)
+                if (part.partName != experimentType.name)
+                    continue;
+#if DEBUG
+                foundPart = true;
+                var foundModule = false;
+#endif
+                foreach (var module in part.modules)
                 {
-                    foundPart = true;
-                    var foundModule = false;
-                    foreach(ProtoPartModuleSnapshot module in part.modules)
+                    if (module.moduleName != "StationExperiment")
+                        continue;
+#if DEBUG
+                    foundModule = true;
+#endif
+                    var cn = module.moduleValues;
+                    if (!cn.HasValue("launched"))
                     {
-                        if (module.moduleName == "StationExperiment")
-                        {
-                            foundModule = true;
-                            ConfigNode cn = module.moduleValues;
-                            if (!cn.HasValue("launched"))
-                            {
-                                StnSciScenario.Log($"{part.partName}: not launched");
-                                continue;
-                            }
-                            if (!cn.HasValue("completed"))
-                            {
-                                StnSciScenario.Log($"{part.partName}: not completed");
-                                continue;
-                            }
-                            float launched, completed;
-                            try
-                            {
-                                launched = float.Parse(cn.GetValue("launched"));
-                                completed = float.Parse(cn.GetValue("completed"));
-                            }
-                            catch(Exception e)
-                            {
-                                StnSciScenario.LogError(e.ToString());
-                                continue;
-                            }
-                            if (completed >= Root.DateAccepted /*launched >= this.Root.DateAccepted && completed >= launched*/)
-                            {
-                                foreach (ConfigNode datum in cn.GetNodes("ScienceData"))
-                                {
-                                    if (!datum.HasValue("subjectID"))
-                                    {
-                                        StnSciScenario.Log("No 'subjectID'");
-                                        continue;
-                                    }
-                                    string subjectID = datum.GetValue("subjectID");
-                                    if (subjectID.ToLower().Contains("@" + targetBody.name.ToLower() + "inspace"))
-                                    {
-                                        StnSciScenario.Log("Completed!");
-                                        StnSciParameter parent = this.Parent as StnSciParameter;
-                                        SetComplete();
-                                        if (parent != null)
-                                            parent.Complete();
-                                        return;
-                                    }
-                                    StnSciScenario.Log($"'{subjectID.ToLower()}' does not contain '{("@" + targetBody.name.ToLower() + "inspace")}'");
-                                }
-                            }
-                            else
-                                StnSciScenario.Log($"launched: '{launched}'; accepted: '{Root.DateAccepted}'; completed: '{completed}'");
-                        }
+                        DebugLog($"{part.partName}: not launched");
+                        continue;
                     }
-                    if (!foundModule)
-                        StnSciScenario.Log($"Part '{part.partName}' does not contain module 'StationExperiment'");
+                    if (!cn.HasValue("completed"))
+                    {
+                        DebugLog($"{part.partName}: not completed");
+                        continue;
+                    }
+                    float launched, completed;
+                    try
+                    {
+                        launched = float.Parse(cn.GetValue("launched"));
+                        completed = float.Parse(cn.GetValue("completed"));
+                    }
+                    catch (Exception e)
+                    {
+                        LogError(e.ToString());
+                        continue;
+                    }
+                    if (completed < Root.DateAccepted)
+                    {
+                        DebugLog($"launched: '{launched}'; accepted: '{Root.DateAccepted}'; completed: '{completed}'");
+                        continue;
+                    }
+                    foreach (var datum in cn.GetNodes("ScienceData"))
+                    {
+                        if (!datum.HasValue("subjectID"))
+                        {
+                            LogError("No 'subjectID'");
+                            continue;
+                        }
+                        string subjectID = datum.GetValue("subjectID");
+                        if (subjectID.ToLower().Contains("@" + targetBody.name.ToLower() + "inspace"))
+                        {
+                            DebugLog("Completed!");
+                            SetComplete();
+                            if (this.Parent is StnSciParameter parent)
+                                parent.Complete();
+                            return;
+                        }
+                        DebugLog($"'{subjectID.ToLower()}' does not contain '{("@" + targetBody.name.ToLower() + "inspace")}'");
+                    }
                 }
+#if DEBUG
+                if (!foundModule)
+                    DebugLog($"Part '{part.partName}' does not contain module 'StationExperiment'");
+#endif
             }
+#if DEBUG
             if (!foundPart)
-                StnSciScenario.Log($"No part matching '{experimentType.name}'");
-        }
-
-        private void OnRecovery(Vessel vessel)
-        {
-            StnSciScenario.Log("Recovering " + vessel.vesselName);
-            CelestialBody targetBody = StnSciParameter.getTargetBody(this);
-            AvailablePart experimentType = StnSciParameter.getExperimentType(this);
-            if (targetBody == null || experimentType == null)
-            {
-                return;
-            }
-            foreach (Part part in vessel.Parts)
-            {
-                if (part.name == experimentType.name)
-                {
-                    StationExperiment e = part.FindModuleImplementing<StationExperiment>();
-                    if (e != null)
-                    {
-                        if (e.launched >= this.Root.DateAccepted && e.completed >= e.launched)
-                        {
-                            ScienceData[] data = e.GetData();
-                            foreach (ScienceData datum in data)
-                            {
-                                if (datum.subjectID.ToLower().Contains("@" + targetBody.name.ToLower() + "inspace"))
-                                {
-                                    StnSciParameter parent = this.Parent as StnSciParameter;
-                                    SetComplete();
-                                    if (parent != null)
-                                        parent.Complete();
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            SetIncomplete();
-        }
-
-        protected override void OnSave(ConfigNode node)
-        {
-            base.OnSave(node);
+                DebugLog($"No part matching '{experimentType.name}'");
+#endif
         }
         protected override void OnLoad(ConfigNode node)
         {

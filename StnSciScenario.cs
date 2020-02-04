@@ -17,9 +17,12 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using UnityEngine;
+
+using Debug = UnityEngine.Debug;
 
 namespace StationScience
 {
@@ -269,25 +272,18 @@ namespace StationScience
                     GameScenes.FLIGHT, GameScenes.EDITOR, GameScenes.TRACKSTATION)]
     public class StnSciScenario : ScenarioModule
     {
+        [Conditional("DEBUG")]
+        public static void DebugLog(string message)
+            => Debug.Log("[StatSci:" + DateTime.Now + "]: " + message);
+
         public static void Log(string message)
-        {
-            Debug.Log("[StatSci:" + DateTime.Now + "]: " + message);
-        }
-
+            => Debug.Log("[StatSci:" + DateTime.Now + "]: " + message);
         public static void LogError(string error)
-        {
-            Debug.LogError("[StatSci:" + DateTime.Now + "]: " + error);
-        }
-
+            => Debug.LogError("[StatSci:" + DateTime.Now + "]: " + error);
         public static void LogWarning(string warning)
-        {
-            Debug.LogWarning("[StatSci:" + DateTime.Now + "]: " + warning);
-        }
-
+            => Debug.LogWarning("[StatSci:" + DateTime.Now + "]: " + warning);
         public static void LogException(Exception ex)
-        {
-            Debug.LogException(ex);
-        }
+            => Debug.LogException(ex);
 
         public static StnSciScenario Instance { get; private set; }
 
