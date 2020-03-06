@@ -27,7 +27,7 @@ using KSP.Localization;
 
 namespace StationScience.Contracts.Parameters
 {
-    using static StnSciScenario;
+    using static StnSciDebug;
 
     public interface IPartRelated
     {

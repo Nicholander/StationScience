@@ -22,10 +22,10 @@ using System.Linq;
 using System.Text;
 using UnityEngine;
 
-using Debug = UnityEngine.Debug;
-
 namespace StationScience
 {
+    using static StnSciDebug;
+
     public class StnSciContractReward : IConfigNode
     {
         [Persistent] public float y_intercept;
@@ -46,19 +46,13 @@ namespace StationScience
         }
 
         public float calcReward(float value, bool first_time = false)
-        {
-            return (y_intercept + value * slope) * (first_time ? first_time_multiplier : 1);
-        }
+            => (y_intercept + value * slope) * (first_time ? first_time_multiplier : 1);
 
         public float calcAdvance(float value, bool first_time = false)
-        {
-            return calcReward(value, first_time) * advance_multiplier;
-        }
+            => calcReward(value, first_time) * advance_multiplier;
 
         public float calcFailure(float value, bool first_time = false)
-        {
-            return calcReward(value, first_time) * failure_multiplier;
-        }
+            => calcReward(value, first_time) * failure_multiplier;
 
         public void Load(ConfigNode node)
         {
@@ -81,15 +75,15 @@ namespace StationScience
                 }
                 catch (Exception e)
                 {
-                    StnSciScenario.LogException(e);
-                    this[val.name] = default(TValue);
+                    LogException(e);
+                    this[val.name] = default;
                 }
             }
         }
 
         public void Save(ConfigNode node)
         {
-            StnSciScenario.LogError("CNMap.Save called; not implemented");
+            LogError("CNMap.Save called; not implemented");
         }
     }
 
@@ -99,11 +93,9 @@ namespace StationScience
 
         public static HashSet<TValue> parse(string s)
         {
-            HashSet<TValue> ret = new HashSet<TValue>();
+            var ret = new HashSet<TValue>();
             foreach(string cur in s.Split(sep))
-            {
                 ret.Add((TValue)System.Convert.ChangeType(cur, typeof(TValue)));
-            }
             return ret;
         }
 
@@ -111,7 +103,7 @@ namespace StationScience
         {
             foreach (ConfigNode.Value val in node.values)
             {
-                if(!this.ContainsKey(val.name))
+                if (!ContainsKey(val.name))
                     this[val.name] = new HashSet<TValue>();
                 try
                 {
@@ -119,14 +111,14 @@ namespace StationScience
                 }
                 catch (Exception e)
                 {
-                    StnSciScenario.LogException(e);
+                    LogException(e);
                 }
             }
         }
 
         public void Save(ConfigNode node)
         {
-            StnSciScenario.LogError("CNMapList.Save called; not implemented");
+            LogError("CNMapList.Save called; not implemented");
         }
     }
 
@@ -224,10 +216,9 @@ namespace StationScience
                 {
                     foreach (var param in contract.AllParameters)
                     {
-                        var pr = param as FinePrint.Contracts.Parameters.PartRequestParameter;
-                        if (pr != null)
+                        if (param is FinePrint.Contracts.Parameters.PartRequestParameter pr)
                         {
-                            ConfigNode node = new ConfigNode("PARAM");
+                            var node = new ConfigNode("PARAM");
                             pr.Save(node);
                             print(node.ToString());
                             FixParam(node);
@@ -272,18 +263,6 @@ namespace StationScience
                     GameScenes.FLIGHT, GameScenes.EDITOR, GameScenes.TRACKSTATION)]
     public class StnSciScenario : ScenarioModule
     {
-        [Conditional("DEBUG")]
-        public static void DebugLog(string message)
-            => Debug.Log("[StatSci:" + DateTime.Now + "]: " + message);
-
-        public static void Log(string message)
-            => Debug.Log("[StatSci:" + DateTime.Now + "]: " + message);
-        public static void LogError(string error)
-            => Debug.LogError("[StatSci:" + DateTime.Now + "]: " + error);
-        public static void LogWarning(string warning)
-            => Debug.LogWarning("[StatSci:" + DateTime.Now + "]: " + warning);
-        public static void LogException(Exception ex)
-            => Debug.LogException(ex);
 
         public static StnSciScenario Instance { get; private set; }
 
@@ -298,20 +277,16 @@ namespace StationScience
             if(settings == null)
             {
                 settings = new StnSciSettings();
-                foreach(ConfigNode node in GameDatabase.Instance.GetConfigNodes("STN_SCI_SETTINGS"))
+                foreach(var node in GameDatabase.Instance.GetConfigNodes("STN_SCI_SETTINGS"))
                 {
                     if (!ConfigNode.LoadObjectFromConfig(settings, node))
-                    {
-                        StnSciScenario.LogError("Station Science: failed to load settings");
-                    }
+                        LogError("Station Science: failed to load settings");
                     settings.Load(node);
                 }
             }
         }
 
         void Start()
-        {
-            print("StnSciScenario started");
-        }
+            => DebugLog("StnSciScenario started");
     }
 }

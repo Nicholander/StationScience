@@ -26,21 +26,20 @@ using KSPAchievements;
 
 namespace StationScience.Contracts
 {
+    using static StnSciDebug;
+
     public class StnSciContract : Contract, Parameters.IPartRelated, Parameters.IBodyRelated
     {
+        static protected StnSciSettings settings => StnSciScenario.Instance.settings;
+
 
         CelestialBody targetBody = null;
         AvailablePart experimentType = null;
 
         public AvailablePart GetPartType()
-        {
-            return experimentType;
-        }
-
+            => experimentType;
         public CelestialBody GetBody()
-        {
-            return targetBody;
-        }
+            => targetBody;
 
         double value = 0;
 
@@ -59,7 +58,7 @@ namespace StationScience.Contracts
         {
             if (standardDeviation <= 0.0)
             {
-                StnSciScenario.LogWarning("Invalid standard deviation: " + standardDeviation);
+                LogWarning("Invalid standard deviation: " + standardDeviation);
                 return 0;
             }
               // Use Box-Muller algorithm
@@ -99,7 +98,7 @@ namespace StationScience.Contracts
             }
             else if (shape <= 0.0)
             {
-                StnSciScenario.LogWarning("Invalid Gamma shape: " + shape);
+                LogWarning("Invalid Gamma shape: " + shape);
                 return 0;
             }
             else
@@ -125,8 +124,8 @@ namespace StationScience.Contracts
 
         List<string> GetUnlockedExperiments()
         {
-            List<string> ret = new List<string>();
-            foreach (var exp in StnSciScenario.Instance.settings.experimentPrereqs)
+            var ret = new List<string>();
+            foreach (var exp in settings.experimentPrereqs)
             {
                 if (AllUnlocked(exp.Value))
                     ret.Add(exp.Key);
@@ -142,64 +141,79 @@ namespace StationScience.Contracts
             public double weight;
         }
 
+#if DEBUG
+        static float lastGenReport = float.NegativeInfinity;
+#endif
         protected override bool Generate()
         {
-            //StnSciScenario.Log("Attempting to generate StnSciContract");
-            if(ActiveCount() >= StnSciScenario.Instance.settings.maxContracts)
+#if DEBUG
+            var now = UnityEngine.Time.realtimeSinceStartup;
+            var dbg = now - lastGenReport >= 10;
+            if (dbg) lastGenReport = now;
+#endif
+            if (ActiveCount() >= settings.maxContracts)
             {
-                /*StnSciScenario.Log("StationScience contracts cap hit (" +
-                    StnSciScenario.Instance.settings.maxContracts + ").");*/
+#if DEBUG
+                if (dbg) DebugLog("Contracts cap hit: " + settings.maxContracts);
+#endif
                 return false;
             }
-            double xp = StnSciScenario.Instance.xp + Reputation.Instance.reputation * StnSciScenario.Instance.settings.reputationFactor;
-            if (this.Prestige == ContractPrestige.Trivial)
-                xp *= StnSciScenario.Instance.settings.trivialMultiplier;
-            if (this.Prestige == ContractPrestige.Significant)
-                xp *= StnSciScenario.Instance.settings.significantMultiplier;
-            if (this.Prestige == ContractPrestige.Exceptional)
-                xp *= StnSciScenario.Instance.settings.exceptionalMultiplier;
+#if DEBUG
+            if (dbg) DebugLog("Attempting to generate StnSciContract");
+#endif
+            double xp = StnSciScenario.Instance.xp + Reputation.Instance.reputation * settings.reputationFactor;
+            if (Prestige == ContractPrestige.Trivial)
+                xp *= settings.trivialMultiplier;
+            if (Prestige == ContractPrestige.Significant)
+                xp *= settings.significantMultiplier;
+            if (Prestige == ContractPrestige.Exceptional)
+                xp *= settings.exceptionalMultiplier;
             if (xp <= 0.5)
                 xp = 0.5;
-            List<string> experiments = GetUnlockedExperiments();
-            List<CelestialBody> bodies = GetBodies_Reached(true, false);
-            //StnSciScenario.Log("visited bodies contains "+bodies.Count());
-            //StnSciScenario.Log("unlocked experiments contains " + experiments.Count());
-            List<ContractCandidate> candidates = new List<ContractCandidate>();
+            var experiments = GetUnlockedExperiments();
+            var bodies = GetBodies_Reached(true, false);
+#if DEBUG
+            if (dbg)
+            {
+                DebugLog("visited bodies contains " + bodies.Count());
+                DebugLog("unlocked experiments contains " + experiments.Count());
+            }
+#endif
+            var candidates = new List<ContractCandidate>();
             double totalWeight = 0.0;
 
             //Get most difficult combination of planet and experiment that doesn't exceed random difficulty target
             foreach (var exp in experiments)
             {
-                //StnSciScenario.Log("trying " + exp);
                 double expValue;
                 try
                 {
-                    expValue = StnSciScenario.Instance.settings.experimentChallenge[exp];
+                    expValue = settings.experimentChallenge[exp];
                 }
                 catch (KeyNotFoundException)
                 {
-                    //StnSciScenario.Log("challenge not found continuing " + exp);
+#if DEBUG
+                    if (dbg) DebugLog("challenge not found continuing " + exp);
+#endif
                     continue;
                 }
                 foreach (var body in bodies)
                 {
-                    //StnSciScenario.Log("trying " + body.name);
                     int acount = ActiveCount(exp, body);
                     if (acount > 0)
                     {
-                        //StnSciScenario.Log("active count for exceded " + body.name);
                         continue;
                     }
                     double plaValue;
                     try
                     {
-                        plaValue = StnSciScenario.Instance.settings.planetChallenge[body.name];
+                        plaValue = settings.planetChallenge[body.name];
                     }
                     catch (KeyNotFoundException)
                     {
                         plaValue = body.scienceValues.InSpaceLowDataValue;
                     }
-                    ContractCandidate candidate = new ContractCandidate();
+                    var candidate = new ContractCandidate();
                     candidate.body = body;
                     candidate.experiment = exp;
                     candidate.value = expValue * plaValue;
@@ -212,7 +226,9 @@ namespace StationScience.Contracts
                     totalWeight += candidate.weight;
                 }
             }
-            //StnSciScenario.Log("generated candidates count " + candidates.Count());
+#if DEBUG
+            if (dbg) DebugLog("generated candidates count " + candidates.Count());
+#endif
             double rand = GetUniform() * totalWeight;
             ContractCandidate chosen = null;
             foreach (var cand in candidates)
@@ -228,60 +244,70 @@ namespace StationScience.Contracts
 
             if (chosen == null)
             {
+#if DEBUG
+                if (dbg) DebugLog("none chosen");
+#endif
                 return false;
             }
 
             if (!SetExperiment(chosen.experiment))
+            {
+#if DEBUG
+                if (dbg) DebugLog("could not set experiment");
+#endif
                 return false;
+            }
             targetBody = chosen.body;
 
             this.value = chosen.value;
-            //StnSciScenario.Log("picked body" + targetBody.name);
 
-            this.AddParameter(new Parameters.StnSciParameter(experimentType, targetBody), null);
+            AddParameter(new Parameters.StnSciParameter(experimentType, targetBody), null);
 
             int ccount = CompletedCount(experimentType.name, targetBody);
             bool first_time = (ccount == 0);
             float v = (float)this.value;
 
-            base.SetExpiry();
+            SetExpiry();
 
-            float sciReward = StnSciScenario.Instance.settings.contractScience.calcReward(v, first_time);
-            base.SetScience(sciReward, targetBody);
+            float sciReward = settings.contractScience.calcReward(v, first_time);
+            SetScience(sciReward, targetBody);
 
-            base.SetDeadlineYears(StnSciScenario.Instance.settings.contractDeadline.calcReward(v, first_time), targetBody);
+            SetDeadlineYears(settings.contractDeadline.calcReward(v, first_time), targetBody);
 
-            base.SetReputation(StnSciScenario.Instance.settings.contractReputation.calcReward(v, first_time),
-                               StnSciScenario.Instance.settings.contractReputation.calcFailure(v, first_time), targetBody);
+            SetReputation(settings.contractReputation.calcReward(v, first_time),
+                settings.contractReputation.calcFailure(v, first_time), targetBody);
 
-            base.SetFunds(StnSciScenario.Instance.settings.contractFunds.calcAdvance(v, first_time),
-                          StnSciScenario.Instance.settings.contractFunds.calcReward(v, first_time),
-                          StnSciScenario.Instance.settings.contractFunds.calcFailure(v, first_time), targetBody);
+            SetFunds(settings.contractFunds.calcAdvance(v, first_time),
+                settings.contractFunds.calcReward(v, first_time),
+                settings.contractFunds.calcFailure(v, first_time), targetBody);
 
-            //StnSciScenario.Log("returning");
+#if DEBUG
+            if (dbg) DebugLog($"Generated: body={targetBody.name}, experiment={experimentType.name} (cc={ccount}), expire={TimeExpiry:F0}");
+#endif
             return true;
+        }
+        protected override void OnGenerateFailed()
+        {
+            DebugLog("Gen failed");
+            base.OnGenerateFailed();
         }
 
         private int ActiveCount(String exp = null, CelestialBody body = null)
         {
             int ret = 0;
             if (ContractSystem.Instance == null)
-            {
                 return 0;
-            }
             if (ContractSystem.Instance.Contracts == null)
-            {
                 return 0;
-            }
-            foreach(Contract con in ContractSystem.Instance.Contracts)
+            foreach(var con in ContractSystem.Instance.Contracts)
             {
-                StnSciContract sscon = con as StnSciContract;
-                if (sscon != null && (sscon.ContractState == Contract.State.Active ||
-                    sscon.ContractState == Contract.State.Offered) &&
-                  (exp == null || sscon.experimentType != null) &&
-                  (body == null || sscon.targetBody != null) &&
-                  ((exp == null || exp == sscon.experimentType.name) &&
-                   (body == null || body.name == sscon.targetBody.name)))
+                if (con is StnSciContract sscon
+                && (sscon.ContractState == State.Active
+                || sscon.ContractState == State.Offered)
+                && (exp == null || sscon.experimentType != null)
+                && (body == null || sscon.targetBody != null)
+                && (exp == null || exp == sscon.experimentType.name)
+                && (body == null || body.name == sscon.targetBody.name))
                     ret += 1;
             }
             return ret;
@@ -291,22 +317,18 @@ namespace StationScience.Contracts
         {
             int ret = 0;
             if (ContractSystem.Instance == null)
-            {
                 return 0;
-            }
             if (ContractSystem.Instance.ContractsFinished == null)
-            {
                 return 0;
-            }
-            foreach(Contract con in ContractSystem.Instance.ContractsFinished)
+            foreach(var con in ContractSystem.Instance.ContractsFinished)
             {
-                StnSciContract sscon = con as StnSciContract;
-                if (sscon != null && sscon.ContractState == Contract.State.Completed &&
-                  sscon.experimentType != null && sscon.targetBody != null &&
-                  (exp == null || sscon.experimentType != null) &&
-                  (body == null || sscon.targetBody != null) &&
-                  ((exp == null || exp == sscon.experimentType.name) &&
-                   (body == null || body.name == sscon.targetBody.name)))
+                if (con is StnSciContract sscon
+                && sscon.ContractState == State.Completed
+                && sscon.experimentType != null && sscon.targetBody != null
+                && (exp == null || sscon.experimentType != null)
+                && (body == null || sscon.targetBody != null)
+                && (exp == null || exp == sscon.experimentType.name)
+                && (body == null || body.name == sscon.targetBody.name))
                     ret += 1;
             }
             return ret;
@@ -317,7 +339,7 @@ namespace StationScience.Contracts
             experimentType = PartLoader.getPartInfoByName(exp);
             if (experimentType == null)
             {
-                StnSciScenario.LogError("Couldn't find experiment part: " + exp);
+                LogError("Couldn't find experiment part: " + exp);
                 return false;
             }
             return true;
@@ -328,47 +350,30 @@ namespace StationScience.Contracts
             targetBody = FlightGlobals.Bodies.FirstOrDefault(body => body.bodyName.ToLower() == planet.ToLower());
             if (targetBody == null)
             {
-                StnSciScenario.LogError("Couldn't find planet: " + planet);
+                LogError("Couldn't find planet: " + planet);
                 return false;
             }
             return true;
         }
 
-        public override bool CanBeCancelled()
-        {
-            return true;
-        }
-        public override bool CanBeDeclined()
-        {
-            return true;
-        }
+        public override bool CanBeCancelled() => true;
+        public override bool CanBeDeclined() => true;
 
         protected override string GetHashString()
-        {
-            return targetBody.bodyName + ":" + experimentType.name;
-        }
+            => targetBody.bodyName + ":" + experimentType.name;
         protected override string GetTitle()
-        {
-            return Localizer.Format("#autoLOC_StatSciContract_Title", experimentType.title, targetBody.name);
-        }
+            => Localizer.Format("#autoLOC_StatSciContract_Title", experimentType.title, targetBody.name);
         protected override string GetDescription()
-        {
-            //those 3 strings appear to do nothing
-            return TextGen.GenerateBackStories("Station Science", Agent.Name, "station science experiment", experimentType.title, new System.Random().Next(), true, true, true);
-        }
+            => TextGen.GenerateBackStories("Station Science", Agent.Name, "station science experiment", experimentType.title, new System.Random().Next(), true, true, true);
         protected override string GetSynopsys()
-        {
-            return Localizer.Format("#autoLOC_StatSciContract_Blurb", experimentType.title, targetBody.name);
-        }
+            => Localizer.Format("#autoLOC_StatSciContract_Blurb", experimentType.title, targetBody.name);
         protected override string MessageCompleted()
-        {
-            return Localizer.Format("#autoLOC_StatSciContract_Completed", experimentType.title, targetBody.name);
-        }
+            => Localizer.Format("#autoLOC_StatSciContract_Completed", experimentType.title, targetBody.name);
 
         protected override void OnCompleted()
         {
             base.OnCompleted();
-            StnSciScenario.Instance.xp += (float) this.value * StnSciScenario.Instance.settings.progressionFactor;
+            StnSciScenario.Instance.xp += (float) this.value * settings.progressionFactor;
         }
 
         protected override void OnLoad(ConfigNode node)
@@ -390,14 +395,22 @@ namespace StationScience.Contracts
 
         bool IsPartUnlocked(string name)
         {
-            AvailablePart part = PartLoader.getPartInfoByName(name);
+            var part = PartLoader.getPartInfoByName(name);
             if (part != null && ResearchAndDevelopment.PartTechAvailable(part))
                 return true;
             return false;
         }
 
+#if DEBUG
+        static float lastMeetReport = float.NegativeInfinity;
+#endif
         public override bool MeetRequirements()
         {
+#if DEBUG
+            var now = UnityEngine.Time.realtimeSinceStartup;
+            var dbg = now - lastMeetReport >= 10;
+            if (dbg) lastMeetReport = now;
+#endif
             CelestialBodySubtree progress = null;
             foreach (var node in ProgressTracking.Instance.celestialBodyNodes)
             {
@@ -406,17 +419,26 @@ namespace StationScience.Contracts
             }
             if (progress == null)
             {
-                StnSciScenario.LogError("ProgressNode for Kerbin not found, terminating");
+                LogError("ProgressNode for Kerbin not found, terminating");
                 return false;
             }
-            if (progress.orbit.IsComplete && 
-                  ( IsPartUnlocked("dockingPort1") ||
-                   IsPartUnlocked("dockingPort2") ||
-                   IsPartUnlocked("dockingPort3") ||
-                   IsPartUnlocked("dockingPortLarge") ||
-                   IsPartUnlocked("dockingPortLateral"))
-                  && (IsPartUnlocked("StnSciLab") || IsPartUnlocked("StnSciCyclo")))
+            if (progress.orbit.IsComplete
+                &&(IsPartUnlocked("dockingPort1")
+                || IsPartUnlocked("dockingPort2")
+                || IsPartUnlocked("dockingPort3")
+                || IsPartUnlocked("dockingPortLarge")
+                || IsPartUnlocked("dockingPortLateral"))
+                &&(IsPartUnlocked("StnSciLab")
+                || IsPartUnlocked("StnSciCyclo")))
+            {
+#if DEBUG
+                if (dbg) DebugLog("Contract requirements met");
+#endif
                 return true;
+            }
+#if DEBUG
+            if (dbg) DebugLog("Contract requirements not met");
+#endif
             return false;
         }
     }

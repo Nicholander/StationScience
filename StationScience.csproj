@@ -71,6 +71,7 @@
     <Compile Include="StationExperiment.cs" />
     <Compile Include="StationScienceModule.cs" />
     <Compile Include="StnSciContract.cs" />
+    <Compile Include="StnSciDebug.cs" />
     <Compile Include="StnSciParameters.cs" />
     <Compile Include="StnSciScenario.cs" />
   </ItemGroup>
